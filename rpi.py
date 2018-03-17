@@ -46,39 +46,44 @@ class CycleController:
     def listen(self):
         global server_url, event_url
         self.init_source()
+        print "Listening to events"
         for event in self.source.events():
             print("Got event {0}".format(event.event))
             if event.event == 'user_request':
                 response = json.loads(event.data)
+                print response
                 self.rfid = response["rfid"]
                 self.ride_id = response["ride_id"]
                 self.set_phase(CycleController.PHASE_YELLOW)
                 self.source.close()
                 self.source = None
                 self.init_ride()
-                break
             elif event.event == 'post_ride':
                 response = json.loads(event.data)
                 # If user wants to continue
                 if response["status"] == 'continue':
                     self.set_phase(CycleController.PHASE_YELLOW)
+                    self.source.close()
+                    self.source = None
+                    self.init_ride()
                 elif response["status"] == 'timeout' or \
                         response["status"] == 'stop':
                     self.set_phase(CycleController.PHASE_RED)
+            print "Listening to events"
 
     def init_ride(self):
         # TODO: Start & Wait for RFID
         # If timeout , go to red phase.
         # ...
         print("Getting rfid")
-        user_rfid = 123  # Get this from RFID
+        user_rfid = "F100"  # Get this from RFID
         if user_rfid == self.rfid:
             # Tell server to start ride
             print("Ride Accepted")
             data = {
                 'status': 'Accepted',
                 'ride_id': self.ride_id,
-                'cycle': self.id,
+                'cycle_id': self.id,
             }
             try:
                 r = requests.post(
@@ -103,7 +108,7 @@ class CycleController:
                 'status': 'Rejected',
                 'message': 'Invalid Card',
                 'ride_id': self.ride_id,
-                'cycle': self.id
+                'cycle_id': self.id
             }
             try:
                 r = requests.post(
@@ -119,18 +124,18 @@ class CycleController:
         _rem = raw_input("remove?")
         # Tell server to reject ride
         data = {
-            'status': 'Stop',
             'ride_id': self.ride_id,
-            'cycle': self.id
+            'cycle_id': self.id
         }
         try:
             r = requests.post(url= server_url + '/stopride', data=data)
+            print "Ride stopped."
         except:
             # TODO: Handle network error
             #       Store the ride_id and rfid in special file
             #       and send them later to server.
             print("Network Error")
-            self.set_phase(CycleController.PHASE_RED)
+            self.set_phase(CycleController.PHASE_ORANGE)
 
 if __name__ == "__main__":
     cycle = CycleController(1, "hrishi")
@@ -146,7 +151,6 @@ if __name__ == "__main__":
                 # Phase Yellow
                 if cycle.phase == CycleController.PHASE_YELLOW:
                     cycle.set_phase(CycleController.PHASE_RED)
-                print("Listening to events")
                 cycle.listen()
         except:
             print("Network Error. Retrying after one sec.")

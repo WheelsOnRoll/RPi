@@ -29,6 +29,7 @@ class CycleController:
         """Get a streaming response for the given event feed using requests."""
         data = {
             'id': self.id
+            'ride_id': self.ride
         }
         return requests.get(url = url, data = data, stream=True)
 

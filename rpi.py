@@ -3,7 +3,7 @@ import time
 import requests
 from sseclient import SSEClient as EventSource
 
-server_url = 'http://10.100.35.97:5000'
+server_url = 'http://10.50.45.174:5000'
 events_url = server_url
 
 class CycleController:
@@ -77,6 +77,7 @@ class CycleController:
         # ...
         print("Getting rfid")
         user_rfid = "F100"  # Get this from RFID
+        _ = raw_input("Insert RFID?")
         if user_rfid == self.rfid:
             # Tell server to start ride
             print("Ride Accepted")

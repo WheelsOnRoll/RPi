@@ -1,61 +1,19 @@
 import json
 import os
-import requests
-import threading
-import thread
 import time
-
-from Queue import Queue
-from RequestQueue import RequestQueue
+import requests
 from sseclient import SSEClient as EventSource
+import threading
+from Queue import Queue
 from threading import Thread
-
 #import smartLockProjectRfid.SPI-Py.MFRC522-python.Read
 import sys
 sys.path.insert(0, '/home/pi/smartLockProject/smartLockProjectRfid/SPI-Py/MFRC522-python/')
-sys.path.insert(0, '/home/pi/smartLockProject/gps')
 
 import Read2
-import GPS
-import motor
 
-import RPi.GPIO as GPIO
-GPIO.setmode(GPIO.BOARD)
- 
-server_url = 'http://10.100.83.253:5000'
+server_url = 'http://192.168.43.142:5000'
 events_url = server_url
-
-
-LED_R = 7
-LED_Y = 11
-LED_G = 13
-
-GPIO.setmode(GPIO.BOARD)
-GPIO.setwarnings(False)
-
-GPIO.setup(LED_R, GPIO.OUT)
-GPIO.setup(LED_Y, GPIO.OUT)
-GPIO.setup(LED_G, GPIO.OUT)
-
-def setLED(i):
-    if i == CycleController.PHASE_RED:
-        GPIO.output(LED_R, GPIO.HIGH)
-        GPIO.output(LED_Y, GPIO.LOW)
-        GPIO.output(LED_G, GPIO.LOW)
-        return
-    if i == CycleController.PHASE_YELLOW:
-        GPIO.output(LED_R, GPIO.LOW)
-        GPIO.output(LED_Y, GPIO.HIGH)
-        GPIO.output(LED_G, GPIO.LOW)
-        return
-    if i == CycleController.PHASE_GREEN:
-        GPIO.output(LED_R, GPIO.LOW)
-        GPIO.output(LED_Y, GPIO.LOW)
-        GPIO.output(LED_G, GPIO.HIGH)
-        return
-    GPIO.output(LED_R, GPIO.LOW)
-    GPIO.output(LED_Y, GPIO.LOW)
-    GPIO.output(LED_G, GPIO.LOW)
 
 class CycleController:
     """
@@ -87,7 +45,6 @@ class CycleController:
         p = ["Red", "Yellow", "Green", "Orange"]
         print("Phase : {0}".format(p[phase]))
         self.phase = phase
-        setLED(phase)
         # TODO: Store the object to a file
         #       for later restoration.
 
@@ -126,8 +83,7 @@ class CycleController:
         # ...
         Read2.start()
         user_rfid = Read2.get_rfid()  # Get this from RFID
-        print user_rfid, self.rfid, user_rfid == self.rfid
-        if int(user_rfid) == int(self.rfid):
+        if user_rfid == self.rfid:
             # Tell server to start ride
             print("Ride Accepted")
             data = {
@@ -143,16 +99,14 @@ class CycleController:
                     # TODO: Open the lock
                     print("Open Lock")
                     self.set_phase(CycleController.PHASE_GREEN)
-                    thread.start_new_thread(motor.spin1, ())
                     self.ride()
                 else:
 
                     print("Failed response")
                     self.set_phase(CycleController.PHASE_RED)
-            except Exception as e:
+            except:
                 # TODO: Handle network error
                 print("Network Error")
-		print e
                 self.set_phase(CycleController.PHASE_RED)
         else:
             # Tell server to reject ride
@@ -166,45 +120,39 @@ class CycleController:
             try:
                 r = requests.post(
                     url=server_url + '/startride', data=data)
-            except Exception as e:
+            except:
                 # TODO: Handle network error
                 print("Network Error")
-                print(e)
-            Read2.wait()
-            Read2.stop()
             self.set_phase(CycleController.PHASE_RED)
 
     def ride(self):
         # Wait for RFID to be removed
-        print("Waiting for rfid  to be removed")
         Read2.wait()
         Read2.stop()
-        print("RFID removed")
-        # _rem = raw_input("remove?")
+        print("Waiting for rfid  to be removed")
+        _rem = raw_input("remove?")
         # Tell server to reject ride
         data = {
             'status': 'Stop',
             'ride_id': self.ride_id,
             'cycle': self.id
         }
-        thread.start_new_thread(motor.spin2, ())
-            # r = requests.post(url= server_url + '/stopride', data=data)
-        rq.add(data)
-        self.set_phase(CycleController.PHASE_RED)
-
-
-rq = RequestQueue(server_url)
+        try:
+            r = requests.post(url= server_url + '/stopride', data=data)
+        except:
+            # TODO: Handle network error
+            #       Store the ride_id and rfid in special file
+            #       and send them later to server.
+            print("Network Error")
+            self.set_phase(CycleController.PHASE_RED)
 
 if __name__ == "__main__":
     cycle = CycleController(1, "hrishi")
 
     Read2.init()
-    GPS.init()
-    GPS.start()
-    rq.start()
 
     print "test"
-    while True:
+    while False:
         # Restore state
         try:
         	
@@ -221,16 +169,12 @@ if __name__ == "__main__":
                 print("Listening to events")
                 cycle.listen()
                 
-        except KeyboardInterrupt:
-            Read2.stop()
-            GPS.stop()
-            setLED(-1)
-            rq.stop()
-            exit()
         except Exception as e:
 	    print e
+	    exc_type, exc_obj, exc_tb = sys.exc_info()
+	    fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
+	    print(exc_type, fname, exc_tb.tb_lineno)
             print("Network Error. Retrying after one sec.")
-            Read2.stop()
             time.sleep(1)
 
 
